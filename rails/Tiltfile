@@ -1,5 +1,7 @@
 syncback = load_dynamic(os.environ['HOME'] + '/tilt-dev/tilt-extensions/syncback/Tiltfile')
 syncback_command_args = syncback['syncback_command_args']
+# after tilt-dev/tilt-extensions#311 is merged
+# load('ext://syncback', 'syncback_command_args')
 
 def rails_image():
     docker_build('tilted-rails', '.', extra_tag='tilted-rails:latest')
