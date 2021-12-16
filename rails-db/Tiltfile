@@ -1,0 +1,23 @@
+supported_databases = ['postgres']
+
+def rails_db(database=None):
+    """
+    Create a database pod of the given type.
+    """
+    objects = ['database-pv:persistentvolume', 'database-pv-claim:persistentvolumeclaim']
+    port = None
+    if database == 'postgres':
+        objects.extend(['database-config:configmap'])
+        port = 5432
+    else:
+        fail('Unsupported database: {}'.format(database))
+
+    k8s_yaml('pv.yaml')
+    k8s_yaml('{}.yaml'.format(database))
+    k8s_resource('rails-database', objects=objects, port_forwards=[port])
+
+if config.main_path == __file__:
+    config.define_string('database', usage='Specify database vendor/type to run. Currently supported: {}'.format(supported_databases))
+    cfg = config.parse()
+    database = cfg.get('database', 'postgres')
+    rails_db(database)

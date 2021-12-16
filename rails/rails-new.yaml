@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rails-new
+  labels:
+    tier: gen
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      tier: gen
+  template:
+    metadata:
+      labels:
+        tier: gen
+    spec:
+      containers:
+      - name: rails
+        image: tilted-rails:tag
+        imagePullPolicy: Always
+        command: ["ruby", "-ve", "sleep"]

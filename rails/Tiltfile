@@ -1,0 +1,63 @@
+syncback = load_dynamic(os.environ['HOME'] + '/tilt-dev/tilt-extensions/syncback/Tiltfile')
+syncback_command_args = syncback['syncback_command_args']
+
+def rails_image():
+    docker_build('tilted-rails', '.', extra_tag='tilted-rails:latest')
+
+def rails_new_pod():
+    k8s_yaml('rails-new.yaml')
+    k8s_resource('rails-new')
+
+def rails_app_resources(name, **extra_args):
+    docker_build(name, name, dockerfile_contents="""
+FROM tilted-rails:latest
+
+COPY . /app
+
+RUN bundle install
+""", live_update=[sync(name, '/app'),
+                  run('bundle install', trigger=[name+'/Gemfile', name+'/Gemfile.lock']),
+                  run('rails restart', trigger=[name+'/config'])])
+    k8s_yaml(encode_yaml({
+        'apiVersion': 'apps/v1',
+        'kind': 'Deployment',
+        'metadata': { 'name': name, 'labels': { 'tier': 'app' } },
+        'spec': {
+            'replicas': 1,
+            'selector': { 'matchLabels': { 'tier': 'app' } },
+            'template': {
+                'metadata': { 'labels': { 'tier': 'app' } },
+                'spec': {
+                    'containers': [{
+                        'name': name,
+                        'image': name+':tag',
+                        'imagePullPolicy': 'Always',
+                        'command': ['rails', 'server'],
+                        'envFrom': [{'configMapRef': {'name': 'database-config'}}]
+                    }]
+                }
+            }
+        }
+    }))
+    k8s_resource(name, port_forwards=[3000], labels=['app'], **extra_args)
+
+
+def rails_app(name='app', args=None):
+    if os.path.exists(name):
+        rails_app_resources(name)
+    else:
+        cmd = ['kubectl', 'exec', 'deploy/rails-new', '--', 'rails', 'new', name]
+        if args:
+            if type(args) == 'string':
+                args = [args]
+            cmd.extend(args)
+        cmd.extend(['-m', 'tilted_rails.rb'])
+        local_resource('rails-new-'+name, cmd)
+        syncback_cmd = syncback_command_args('deploy/rails-new', '/app/'+name+'/', target_dir=name)
+        local_resource('rails-new-'+name+'-gen', syncback_cmd, resource_deps=['rails-new-'+name])
+        rails_app_resources(name, resource_deps=['rails-new-'+name+'-gen'])
+
+
+if config.main_path == __file__:
+    rails_image()
+    rails_new_pod()

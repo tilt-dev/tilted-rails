@@ -1,0 +1,62 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: database-config
+data:
+  POSTGRES_DB: "rails_development"
+  POSTGRES_USER: "rails"
+  POSTGRES_PASSWORD: "rails"
+  DATABASE_URL: "postgres://postgres:5432/rails_development?pool=5"
+  DATABASE_HOST: "postgres"
+  DATABASE_PORT: "5432"
+  DATABASE_USERNAME: "rails"
+  DATABASE_PASSWORD: "rails"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rails-database
+  labels:
+    tier: database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      tier: database
+  template:
+    metadata:
+      labels:
+        tier: database
+    spec:
+      containers:
+        - name: database
+          image: postgres
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: database-config
+          ports:
+            - name: postgres
+              containerPort: 5432
+          volumeMounts:
+            - mountPath: /var/lib/postgresql/data
+              name: postgres
+      volumes:
+        - name: postgres
+          persistentVolumeClaim:
+            claimName: database-pv-claim
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    tier: database
+spec:
+  type: NodePort
+  ports:
+   - port: 5432
+     protocol: TCP
+     name: postgres
+  selector:
+    tier: database
